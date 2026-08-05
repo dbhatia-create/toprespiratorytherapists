@@ -3,13 +3,11 @@
 import { CheckCircle2 } from "lucide-react";
 import FadeIn from "@/components/ui/FadeIn";
 import Button from "@/components/ui/Button";
-import DebugPayloadPanel from "@/components/checkout/DebugPayloadPanel";
 import { useCheckoutStore } from "@/lib/store/checkoutStore";
 import type { SiteConfig } from "@/lib/config";
 
 export default function Step6ThankYou({ config }: { config: SiteConfig }) {
   const listingChoice = useCheckoutStore((s) => s.listingChoice);
-  const debugSubmissionPayload = useCheckoutStore((s) => s.debugSubmissionPayload);
   const contact = useCheckoutStore((s) => s.contact);
   const reset = useCheckoutStore((s) => s.reset);
 
@@ -28,17 +26,15 @@ export default function Step6ThankYou({ config }: { config: SiteConfig }) {
           ) : (
             <p className="text-muted">
               Your order has been received. Your listing will go live within approximately{" "}
-              <strong>{config.productionTimelineDays} business days</strong>. A confirmation has
-              been sent to <strong>{contact.email || "your inbox"}</strong>.
+              <strong>{config.productionTimelineDays} business days</strong>. A confirmation has been
+              sent to <strong>{contact.email || "your inbox"}</strong>.
             </p>
           )}
+          <p className="text-xs text-muted mt-4">
+            This charge will appear on your bank or credit card statement as{" "}
+            <strong>Digital Service Brands</strong>.
+          </p>
         </div>
-
-        {process.env.NODE_ENV !== "production" && (
-          <div className="text-left">
-            <DebugPayloadPanel payload={debugSubmissionPayload} />
-          </div>
-        )}
 
         <Button variant="outline" onClick={reset}>
           Start a New Application

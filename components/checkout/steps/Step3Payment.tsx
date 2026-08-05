@@ -1,15 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Lock } from "lucide-react";
 import FadeIn from "@/components/ui/FadeIn";
 import Button from "@/components/ui/Button";
-import { FormField, Input, Select } from "@/components/ui/FormField";
+import { FormField, Input, Select, Checkbox } from "@/components/ui/FormField";
 import OrderSummarySidebar from "@/components/checkout/OrderSummarySidebar";
 import { useCheckoutStore } from "@/lib/store/checkoutStore";
 import { paymentSchema, type PaymentData } from "@/lib/checkoutSchema";
-import { ALL_STATES } from "@/lib/checkoutMarkets";
+import { ALL_STATES } from "@/lib/markets";
 import type { SiteConfig } from "@/lib/config";
 
 const formatCardNumber = (v: string) =>
@@ -22,22 +23,47 @@ const formatExpiry = (v: string) => {
 
 export default function Step3Payment({ config }: { config: SiteConfig }) {
   const payment = useCheckoutStore((s) => s.payment);
+  const contact = useCheckoutStore((s) => s.contact);
+  const plaqueShipping = useCheckoutStore((s) => s.plaqueShipping);
   const setPayment = useCheckoutStore((s) => s.setPayment);
   const goNext = useCheckoutStore((s) => s.goNext);
   const goBack = useCheckoutStore((s) => s.goBack);
+
+  const [sameAsContact, setSameAsContact] = useState(false);
+  const [sameAsShipping, setSameAsShipping] = useState(false);
 
   const {
     register,
     handleSubmit,
     control,
+    setValue,
     formState: { errors },
   } = useForm<PaymentData>({
     resolver: zodResolver(paymentSchema),
     defaultValues: payment,
   });
 
+  function handleSameAsContactChange(checked: boolean) {
+    setSameAsContact(checked);
+    if (checked) {
+      setValue("cardholderName", `${contact.firstName} ${contact.lastName}`.trim());
+    }
+  }
+
+  function handleSameAsShippingChange(checked: boolean) {
+    setSameAsShipping(checked);
+    if (checked && plaqueShipping) {
+      setValue("billingAddress", plaqueShipping.street);
+      setValue("billingCity", plaqueShipping.city);
+      setValue("billingState", plaqueShipping.state);
+      setValue("billingZip", plaqueShipping.zip);
+    }
+  }
+
   function onSubmit(values: PaymentData) {
     setPayment(values);
+    // No real processor call yet — advancing the step is the entire
+    // "charge" simulation, matching the current site's existing apply flow.
     goNext();
   }
 
@@ -51,15 +77,29 @@ export default function Step3Payment({ config }: { config: SiteConfig }) {
             </h2>
           </div>
 
+          <div className="rounded-lg border border-accent/40 bg-accent/5 px-4 py-3">
+            <p className="text-sm text-dark">
+              <strong className="text-primary">Please stay on this page</strong> and complete the
+              checkout — closing this window after paying but before finishing may leave your
+              listing incomplete.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField
-              label="Cardholder Name"
-              required
-              className="sm:col-span-2"
-              error={errors.cardholderName?.message}
-            >
-              <Input {...register("cardholderName")} error={errors.cardholderName?.message} />
-            </FormField>
+            <div className="sm:col-span-2 space-y-2">
+              <Checkbox
+                label="Same as contact name"
+                checked={sameAsContact}
+                onChange={(e) => handleSameAsContactChange(e.target.checked)}
+              />
+              <FormField label="Cardholder Name" required error={errors.cardholderName?.message}>
+                <Input
+                  {...register("cardholderName")}
+                  disabled={sameAsContact}
+                  error={errors.cardholderName?.message}
+                />
+              </FormField>
+            </div>
 
             <Controller
               name="cardNumber"
@@ -101,34 +141,75 @@ export default function Step3Payment({ config }: { config: SiteConfig }) {
             <FormField label="CVV" required error={errors.cvv?.message}>
               <Input inputMode="numeric" maxLength={4} {...register("cvv")} error={errors.cvv?.message} />
             </FormField>
+          </div>
 
-            <FormField
-              label="Billing Address"
-              required
-              className="sm:col-span-2"
-              error={errors.billingAddress?.message}
-            >
-              <Input {...register("billingAddress")} error={errors.billingAddress?.message} />
-            </FormField>
+          <div>
+            <h2 className="text-lg font-semibold text-primary mb-1">Billing Address</h2>
+            {config.shippingRequired && plaqueShipping && (
+              <Checkbox
+                label="Same as shipping address"
+                checked={sameAsShipping}
+                onChange={(e) => handleSameAsShippingChange(e.target.checked)}
+                className="mb-3"
+              />
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <FormField
+                label="Billing Address"
+                required
+                className="sm:col-span-2"
+                error={errors.billingAddress?.message}
+              >
+                <Input
+                  {...register("billingAddress")}
+                  disabled={sameAsShipping}
+                  error={errors.billingAddress?.message}
+                />
+              </FormField>
 
-            <FormField label="Billing City" required error={errors.billingCity?.message}>
-              <Input {...register("billingCity")} error={errors.billingCity?.message} />
-            </FormField>
+              <FormField
+                label="Address Line 2 (optional)"
+                className="sm:col-span-2"
+                error={errors.billingAddress2?.message}
+              >
+                <Input
+                  {...register("billingAddress2")}
+                  disabled={sameAsShipping}
+                  error={errors.billingAddress2?.message}
+                />
+              </FormField>
 
-            <FormField label="Billing State" required error={errors.billingState?.message}>
-              <Select {...register("billingState")} error={errors.billingState?.message}>
-                <option value="">Select…</option>
-                {ALL_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+              <FormField label="Billing City" required error={errors.billingCity?.message}>
+                <Input
+                  {...register("billingCity")}
+                  disabled={sameAsShipping}
+                  error={errors.billingCity?.message}
+                />
+              </FormField>
 
-            <FormField label="Billing ZIP Code" required error={errors.billingZip?.message}>
-              <Input {...register("billingZip")} error={errors.billingZip?.message} />
-            </FormField>
+              <FormField label="Billing State" required error={errors.billingState?.message}>
+                <Select
+                  {...register("billingState")}
+                  disabled={sameAsShipping}
+                  error={errors.billingState?.message}
+                >
+                  <option value="">Select...</option>
+                  {ALL_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+
+              <FormField label="Billing ZIP Code" required error={errors.billingZip?.message}>
+                <Input
+                  {...register("billingZip")}
+                  disabled={sameAsShipping}
+                  error={errors.billingZip?.message}
+                />
+              </FormField>
+            </div>
           </div>
 
           <div className="flex justify-between">

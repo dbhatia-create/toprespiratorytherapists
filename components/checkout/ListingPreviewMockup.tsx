@@ -2,7 +2,7 @@
 
 import { Star, MapPin, Building2 } from "lucide-react";
 import type { UploadedFileMeta } from "@/lib/store/checkoutStore";
-import type { SelectedMarket } from "@/lib/checkoutMarkets";
+import type { SelectedMarket } from "@/lib/markets";
 
 export default function ListingPreviewMockup({
   businessName,
@@ -36,7 +36,7 @@ export default function ListingPreviewMockup({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-1">
             <h3 className="font-bold text-primary truncate">
-              {businessName || "Your Practice Name"}
+              {businessName || "Your Business Name"}
             </h3>
             <div className="flex text-accent shrink-0">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -51,7 +51,7 @@ export default function ListingPreviewMockup({
           )}
           {people && <p className="text-xs text-muted mb-2 truncate">{people}</p>}
           <p className="text-sm text-dark line-clamp-2">
-            {bio || "Your practice description will appear here once you add a bio below."}
+            {bio || "Your company description will appear here once you add a bio below."}
           </p>
         </div>
       </div>

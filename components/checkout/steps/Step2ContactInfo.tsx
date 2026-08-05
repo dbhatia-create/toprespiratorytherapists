@@ -7,7 +7,7 @@ import Button from "@/components/ui/Button";
 import { FormField, Input, Textarea, Select } from "@/components/ui/FormField";
 import { useCheckoutStore } from "@/lib/store/checkoutStore";
 import { contactSchema, type ContactData } from "@/lib/checkoutSchema";
-import { ALL_STATES } from "@/lib/checkoutMarkets";
+import { ALL_STATES } from "@/lib/markets";
 import type { SiteConfig } from "@/lib/config";
 
 export default function Step2ContactInfo({ config: _config }: { config: SiteConfig }) {
@@ -68,7 +68,7 @@ export default function Step2ContactInfo({ config: _config }: { config: SiteConf
             <FormField label="Title / Role" error={errors.title?.message}>
               <Input {...register("title")} error={errors.title?.message} />
             </FormField>
-            <FormField label="Practice Name" required error={errors.company?.message}>
+            <FormField label="Business Name" required error={errors.company?.message}>
               <Input {...register("company")} error={errors.company?.message} />
             </FormField>
             <FormField label="Email Address" required error={errors.email?.message}>
@@ -102,7 +102,7 @@ export default function Step2ContactInfo({ config: _config }: { config: SiteConf
             </FormField>
             <FormField label="State" required error={errors.plaqueState?.message}>
               <Select {...register("plaqueState")} error={errors.plaqueState?.message}>
-                <option value="">Select…</option>
+                <option value="">Select...</option>
                 {ALL_STATES.map((s) => (
                   <option key={s} value={s}>
                     {s}

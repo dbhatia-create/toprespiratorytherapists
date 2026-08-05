@@ -13,9 +13,22 @@ import Step6ThankYou from "./steps/Step6ThankYou";
 
 export default function CheckoutWizard({ config }: { config: SiteConfig }) {
   const step = useCheckoutStore((s) => s.step);
+  const captureAttribution = useCheckoutStore((s) => s.captureAttribution);
   const topRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
 
+  // First-touch attribution (referrer + entry URL) — captured once here so
+  // it's set before Step 4 builds the deal payload, regardless of which step
+  // the user starts on (e.g. resuming a persisted session).
+  useEffect(() => {
+    captureAttribution();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Jump back to the top of the step content on every step change so the
+  // next screen starts in view instead of wherever the user scrolled to on
+  // the previous (long) screen — most noticeable on mobile where a single
+  // step can be several screens tall.
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
@@ -25,7 +38,7 @@ export default function CheckoutWizard({ config }: { config: SiteConfig }) {
   }, [step]);
 
   return (
-    <div className="min-h-screen bg-bg py-10">
+    <div className="min-h-screen bg-bg py-10 text-dark">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div ref={topRef} className="mb-6 scroll-mt-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-accent-dark">
