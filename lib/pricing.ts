@@ -1,13 +1,23 @@
 export const PRICING = {
-  cityListing: 289,
-  cityFeatured: 689,
-  cityFeaturedAdditional: 345,
+  baseCity: 289,
+  spotlightCity: 689,
 } as const;
 
-export interface QuoteInput {
+// New shape (BFF-backed wizard). `cities` + `featured` flag + opt-out list.
+interface QuoteInputNew {
+  cities: { city: string; state: string }[];
+  featured: boolean;
+  excludedFeatured: string[];
+}
+
+// Legacy shape kept for backward compatibility with existing callers (e.g.
+// /api/apply route, lib/bff.ts's sendApplyToBff).
+interface QuoteInputLegacy {
   locations: { city: string; state: string }[];
   featuredLocations: string[];
 }
+
+export type QuoteInput = QuoteInputNew | QuoteInputLegacy;
 
 export interface QuoteLineItem {
   label: string;
@@ -19,30 +29,47 @@ export interface Quote {
   total: number;
 }
 
+/** Helper kept for legacy callers that build "city|state" keys. */
 export function locationKey(loc: { city: string; state: string }): string {
   return `${loc.city}|${loc.state}`;
 }
 
-export function calculateQuote({ locations, featuredLocations }: QuoteInput): Quote {
-  if (locations.length === 0) return { lineItems: [], total: 0 };
+function isNewShape(input: QuoteInput): input is QuoteInputNew {
+  return "cities" in input;
+}
+
+export function calculateQuote(input: QuoteInput): Quote {
+  // Normalize both shapes into the same internal representation.
+  let cities: { city: string; state: string }[];
+  let featuredCount: number;
+
+  if (isNewShape(input)) {
+    cities = input.cities;
+    if (input.featured && cities.length > 0) {
+      featuredCount = cities.filter(
+        (loc) => !input.excludedFeatured.includes(`${loc.city}|${loc.state}`),
+      ).length;
+    } else {
+      featuredCount = 0;
+    }
+  } else {
+    cities = input.locations;
+    featuredCount = input.featuredLocations.length;
+  }
 
   const lineItems: QuoteLineItem[] = [];
-  const totalCities = locations.length;
-  const featuredCount = featuredLocations.length;
+  const cityCount = Math.max(1, cities.length);
 
   lineItems.push({
-    label: `Basic Listing — ${totalCities} cit${totalCities > 1 ? "ies" : "y"}`,
-    amount: totalCities * PRICING.cityListing,
+    label: `Company listing × ${cityCount} cit${cityCount > 1 ? "ies" : "y"}`,
+    amount: PRICING.baseCity * cityCount,
   });
 
   if (featuredCount > 0) {
-    lineItems.push({ label: "Featured Listing — first city", amount: PRICING.cityFeatured });
-    if (featuredCount > 1) {
-      lineItems.push({
-        label: `Featured Listing — ${featuredCount - 1} additional cit${featuredCount > 2 ? "ies" : "y"} (50% off)`,
-        amount: (featuredCount - 1) * PRICING.cityFeaturedAdditional,
-      });
-    }
+    lineItems.push({
+      label: `City Spotlight × ${featuredCount} cit${featuredCount > 1 ? "ies" : "y"}`,
+      amount: PRICING.spotlightCity * featuredCount,
+    });
   }
 
   const total = lineItems.reduce((sum, item) => sum + item.amount, 0);
@@ -54,5 +81,6 @@ export function formatCurrency(amount: number): string {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(amount);
 }

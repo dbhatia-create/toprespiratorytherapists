@@ -1,15 +1,22 @@
 "use client";
 
-import { Zap, Star, MapPin, Shield, Building2 } from "lucide-react";
+import Image from "next/image";
+import { Zap, Star, MapPin, Building2 } from "lucide-react";
 import { formatCurrency } from "@/lib/pricing";
+import { previewBusinesses } from "@/content/previewBusinesses";
 
-const OTHER_LISTINGS = ["Clear Breath Respiratory Care", "Metro Pulmonary Associates", "Vital Air Respiratory Services"];
+const OTHER_LISTINGS = ["PulmonaryCare Associates", "BreathRight Therapy Group", "AirWay Respiratory Partners"];
+const HERO_IMAGE = previewBusinesses[0].imageUrl;
 
 /**
  * A prominent glowing Featured card mimicking the homepage directory
  * preview, with a few generic "other listings" rows greyed out below it.
  * Placeholder content only — real business data is collected on the Listing
  * Info screen.
+ *
+ * Purely illustrative — selection happens via the checkbox list in
+ * Step4Upsells, not by clicking anything here. Rendered once (for a
+ * representative city), not once per eligible city.
  */
 export default function FeaturedCityOffer({
   city,
@@ -17,18 +24,12 @@ export default function FeaturedCityOffer({
   areaLabel,
   businessNoun,
   price,
-  isSelected,
-  isSoldOut,
-  onToggle,
 }: {
   city: string;
   state: string;
   areaLabel?: string;
   businessNoun: string;
   price: number;
-  isSelected: boolean;
-  isSoldOut?: boolean;
-  onToggle: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -59,12 +60,13 @@ export default function FeaturedCityOffer({
             </div>
 
             <div className="flex gap-4 p-4">
-              <div className="relative h-24 w-24 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-accent/50 shadow-lg shadow-accent/20 flex items-center justify-center bg-gradient-to-br from-accent to-accent-light">
-                <Shield size={32} className="text-primary-dark" fill="currentColor" strokeWidth={1} />
+              <div className="relative h-24 w-24 rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-accent/50 shadow-lg shadow-accent/20">
+                <Image src={HERO_IMAGE} alt="" fill className="object-cover object-top" sizes="96px" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
               </div>
 
               <div className="flex-1 min-w-0">
-                <h4 className="text-base font-black text-white truncate">Your Practice Name</h4>
+                <h4 className="text-base font-black text-white truncate">Your Business Name</h4>
                 <div className="flex items-center gap-1 mt-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Star
@@ -86,28 +88,9 @@ export default function FeaturedCityOffer({
               </div>
 
               <div className="flex-shrink-0 flex flex-col items-end justify-between">
-                {isSoldOut ? (
-                  <span className="text-xs bg-white/10 text-white/60 font-black px-4 py-2 rounded shadow-sm whitespace-nowrap">
-                    Sold Out
-                  </span>
-                ) : (
-                  <>
-                    <span className="text-xs font-semibold text-accent-light whitespace-nowrap">
-                      +{formatCurrency(price)}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={onToggle}
-                      className={
-                        isSelected
-                          ? "text-xs bg-white text-primary font-black px-4 py-2 rounded shadow-sm whitespace-nowrap"
-                          : "text-xs bg-gradient-to-r from-accent to-accent-light text-primary-dark font-black px-4 py-2 rounded shadow-sm shadow-accent/30 whitespace-nowrap"
-                      }
-                    >
-                      {isSelected ? "Remove" : "Add Featured"}
-                    </button>
-                  </>
-                )}
+                <span className="text-xs font-semibold text-accent-light whitespace-nowrap">
+                  +{formatCurrency(price)}
+                </span>
               </div>
             </div>
           </div>

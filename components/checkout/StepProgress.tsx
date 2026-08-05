@@ -16,6 +16,9 @@ const STEPS: { step: WizardStep; label: string }[] = [
 const WINDOW_SIZE = 3;
 const MAX_WINDOW_START = STEPS.length - WINDOW_SIZE + 1;
 
+// A 3-wide window of real step bubbles, anchored at the current step and
+// clamped so it never slides past the last step: 1 -> [1,2,3], 2 -> [2,3,4],
+// ... 4,5,6 all show [4,5,6] since the window can't extend past step 6.
 function getWindowStart(step: WizardStep): number {
   return Math.min(step, MAX_WINDOW_START);
 }

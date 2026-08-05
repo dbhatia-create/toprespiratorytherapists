@@ -12,14 +12,18 @@ export default function SpecialtySelector({ config }: { config: SiteConfig }) {
   const { specialty } = config;
   if (!specialty) return null;
 
+  const hasPerOptionCost = specialty.pricePerOption > 0;
+
   return (
     <div>
       <p className="text-sm font-semibold text-primary mb-2">
         {specialty.label}
         {specialty.required && <span className="text-accent-dark ml-1">*</span>}
-        <span className="text-xs font-normal text-muted ml-1">
-          (first one included — additional {formatCurrency(specialty.pricePerOption)} each)
-        </span>
+        {hasPerOptionCost && (
+          <span className="text-xs font-normal text-muted ml-1">
+            (first one included — additional {formatCurrency(specialty.pricePerOption)} each)
+          </span>
+        )}
       </p>
       <div className="flex flex-wrap gap-2">
         {specialty.options.map((opt) => {
@@ -38,9 +42,11 @@ export default function SpecialtySelector({ config }: { config: SiteConfig }) {
               )}
             >
               {opt.label}
-              <span className={clsx("ml-1.5", isSelected ? "text-accent-dark" : "text-muted")}>
-                {isIncluded ? "Included" : `+${formatCurrency(specialty.pricePerOption)}`}
-              </span>
+              {hasPerOptionCost && (
+                <span className={clsx("ml-1.5", isSelected ? "text-accent-dark" : "text-muted")}>
+                  {isIncluded ? "Included" : `+${formatCurrency(specialty.pricePerOption)}`}
+                </span>
+              )}
             </button>
           );
         })}

@@ -13,8 +13,7 @@ import BusinessHoursEditor from "@/components/checkout/BusinessHoursEditor";
 import FileUploadDropzone from "@/components/checkout/FileUploadDropzone";
 import { useCheckoutStore, type UploadKind } from "@/lib/store/checkoutStore";
 import { buildListingInfoNowSchema } from "@/lib/checkoutSchema";
-import { buildApplyPayload } from "@/lib/submission";
-import { ALL_STATES } from "@/lib/checkoutMarkets";
+import { ALL_STATES } from "@/lib/markets";
 import type { SiteConfig } from "@/lib/config";
 
 const UPLOAD_LABELS: Record<UploadKind, string> = {
@@ -23,11 +22,20 @@ const UPLOAD_LABELS: Record<UploadKind, string> = {
   bannerImage: "Banner Image",
 };
 
+const UPLOAD_KIND_TO_ASSET_NAME: Record<UploadKind, "profile" | "banner" | "logo"> = {
+  profilePhoto: "profile",
+  bannerImage: "banner",
+  logo: "logo",
+};
+
 export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
   const store = useCheckoutStore();
   const [listingChoice, setLocalListingChoice] = useState<"now" | "later">(
     store.listingChoice ?? "now",
   );
+  // Seeded once from the contact email as a convenience default, but kept
+  // independent — editing it here must not mutate Step 2's contact email.
+  const [linkEmail, setLinkEmail] = useState(store.contact.email);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -35,60 +43,78 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
   const info = store.listingInfo;
   const firstMarket = store.selectedMarkets[0] ?? null;
 
-  async function submitToApi(choice: "now" | "later") {
-    const payload = buildApplyPayload({
-      config,
-      selectedMarkets: store.selectedMarkets,
-      specialtyIds: store.specialtyIds,
-      contact: store.contact,
-      plaqueShipping: store.plaqueShipping,
-      payment: store.payment,
-      listingChoice: choice,
-      listingInfo: choice === "now" ? info : null,
-    });
+  // The deal already exists by the time this step renders (created on
+  // leaving Step 4). This is always an *update* against that same deal,
+  // never a second create.
+  async function postUpdate(metadata: Record<string, unknown>): Promise<boolean> {
+    const formData = new FormData();
+    formData.append("metadata", JSON.stringify(metadata));
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    try {
-      const res = await fetch("/api/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        // Some sites' /api/apply returns a structured Zod error object
-        // (not a string) on 422 — never render that object directly.
-        const message =
-          typeof body?.error === "string"
-            ? body.error
-            : "Something went wrong submitting your application. Please try again.";
-        setSubmitError(message);
-        return;
-      }
-      store.setListingChoice(choice);
-      store.setDebugSubmissionPayload(payload);
-      store.goNext();
-    } catch {
-      setSubmitError("Could not reach the server. Please check your connection and try again.");
-    } finally {
-      setIsSubmitting(false);
+    for (const kind of config.listingFields.fileUploadTypes) {
+      const meta = store.uploadedFiles[kind];
+      if (!meta) continue;
+      const blob = await fetch(meta.previewUrl).then((r) => r.blob());
+      formData.append(UPLOAD_KIND_TO_ASSET_NAME[kind], blob, meta.name);
     }
+
+    const res = await fetch(`/api/update_deals/${store.dealId}`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) return false;
+
+    // Swap each blob-URL preview for the real signed URL now that it's uploaded.
+    const data: { assets: Record<string, string | null> } = await res.json();
+    for (const kind of config.listingFields.fileUploadTypes) {
+      const assetName = UPLOAD_KIND_TO_ASSET_NAME[kind];
+      const signedUrl = data.assets[assetName];
+      const existing = store.uploadedFiles[kind];
+      if (signedUrl && existing) {
+        store.setUploadedFile(kind, { ...existing, previewUrl: signedUrl });
+      }
+    }
+    return true;
   }
 
   async function handleSubmit() {
+    if (!store.dealId) return; // defensive — Step 4 can't be left without setting this
+
     if (listingChoice === "later") {
-      const emailCheck = z.string().email("Enter a valid email address").safeParse(store.contact.email);
+      const emailCheck = z.string().email("Enter a valid email address").safeParse(linkEmail);
       if (!emailCheck.success) {
         setErrors({ linkEmail: emailCheck.error.issues[0]?.message ?? "Enter a valid email address" });
         return;
       }
       setErrors({});
-      await submitToApi("later");
+      setIsSubmitting(true);
+      setSubmitError(null);
+      // shop_name is included here too (not just the "now" branch below) —
+      // this is the only update_deals call a "later"-choice deal ever gets,
+      // so without it the company name collected at Step 2 would never reach
+      // the deal at all.
+      const ok = await postUpdate({ shop_name: store.contact.company, link_email: linkEmail }).catch(
+        () => false,
+      );
+      if (!ok) {
+        setIsSubmitting(false);
+        setSubmitError("Something went wrong submitting your application. Please try again.");
+        return;
+      }
+      // Email the applicant the "reply with your listing details" checklist at the
+      // address they entered. Best-effort — a mail hiccup must not block finishing
+      // the wizard (the deal is already saved above).
+      await fetch(`/api/complete_later_email/${store.dealId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: linkEmail }),
+      }).catch(() => {});
+      setIsSubmitting(false);
+      store.setListingChoice("later");
+      store.goNext();
       return;
     }
 
-    const result = buildListingInfoNowSchema().safeParse({ listingChoice: "now", ...info });
+    const result = buildListingInfoNowSchema(config).safeParse({ listingChoice: "now", ...info });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
       for (const issue of result.error.issues) {
@@ -98,12 +124,44 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
       return;
     }
     setErrors({});
-    await submitToApi("now");
+
+    const metadata: Record<string, unknown> = {
+      shop_name: info.businessName,
+      key_staff: info.people,
+      shop_phone: info.listingPhone,
+      listing_email: info.listingEmail,
+      website: info.website,
+      asset_permission: info.assetPermission ? "yes" : "no",
+      bio: info.bio,
+      hours: info.hours,
+      ...(!info.sameAsBilling && info.businessAddress
+        ? { business_address: info.businessAddress }
+        : {}),
+    };
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    const ok = await postUpdate(metadata).catch(() => false);
+    setIsSubmitting(false);
+    if (!ok) {
+      setSubmitError("Something went wrong submitting your application. Please try again.");
+      return;
+    }
+    store.setListingChoice("now");
+    store.goNext();
   }
 
   return (
     <FadeIn>
       <div className="space-y-8 max-w-3xl">
+        <div className="rounded-lg border border-accent/40 bg-accent/5 px-4 py-3">
+          <p className="text-sm text-dark">
+            Your order has been completed. Charges on your card will appear as{" "}
+            <strong className="text-primary">Digital Service Brands</strong>. You can complete
+            your listing details below, or we&apos;ll email you a link to finish it later.
+          </p>
+        </div>
+
         <ListingPreviewMockup
           businessName={info.businessName}
           bio={info.bio}
@@ -163,8 +221,8 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
             >
               <Input
                 type="email"
-                value={store.contact.email}
-                onChange={(e) => store.setContact({ email: e.target.value })}
+                value={linkEmail}
+                onChange={(e) => setLinkEmail(e.target.value)}
                 error={errors.linkEmail}
               />
             </FormField>
@@ -188,6 +246,7 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
               </FormField>
               <FormField
                 label={config.listingFields.peopleLabel}
+                required
                 className="sm:col-span-2"
                 hint="Separate multiple names with commas"
                 error={errors.people}
@@ -274,7 +333,7 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
                         })
                       }
                     >
-                      <option value="">Select…</option>
+                      <option value="">Select...</option>
                       {ALL_STATES.map((s) => (
                         <option key={s} value={s}>
                           {s}
@@ -310,7 +369,7 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
               onChange={(v) => store.setListingInfo({ bio: v })}
               maxChars={config.listingFields.bioMaxChars}
               error={errors.bio}
-              placeholder="Tell prospective customers about your business…"
+              placeholder="Tell prospective clients about your respiratory therapy practice..."
             />
 
             <BusinessHoursEditor
@@ -348,12 +407,9 @@ export default function Step5ListingInfo({ config }: { config: SiteConfig }) {
           </p>
         )}
 
-        <div className="flex justify-between">
-          <Button type="button" variant="ghost" onClick={store.goBack} disabled={isSubmitting}>
-            Back
-          </Button>
+        <div className="flex justify-end">
           <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? "Submitting…" : listingChoice === "later" ? "Send Me the Link" : "Submit"}
+            {isSubmitting ? "Submitting..." : listingChoice === "later" ? "Send Me the Link" : "Submit"}
           </Button>
         </div>
       </div>

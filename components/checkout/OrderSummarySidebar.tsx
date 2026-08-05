@@ -3,7 +3,7 @@
 import { X } from "lucide-react";
 import { useCheckoutStore } from "@/lib/store/checkoutStore";
 import type { SiteConfig } from "@/lib/config";
-import { calculateQuote, formatCurrency, locationKey } from "@/lib/pricing";
+import { calculateQuote, formatCurrency } from "@/lib/pricing";
 
 export default function OrderSummarySidebar({ config }: { config: SiteConfig }) {
   const selectedMarkets = useCheckoutStore((s) => s.selectedMarkets);
@@ -15,11 +15,15 @@ export default function OrderSummarySidebar({ config }: { config: SiteConfig }) 
     .filter((o) => specialtyIds.includes(o.id))
     .map((o) => o.label);
 
-  const featuredLocations = selectedMarkets.filter((m) => m.featured).map((m) => locationKey(m));
+  const featured = selectedMarkets.some((m) => m.featured);
+  const excludedFeatured = selectedMarkets
+    .filter((m) => !m.featured)
+    .map((m) => `${m.city}|${m.state}`);
 
   const quote = calculateQuote({
-    locations: selectedMarkets.map((m) => ({ city: m.city, state: m.state })),
-    featuredLocations,
+    cities: selectedMarkets.map((m) => ({ city: m.city, state: m.state })),
+    featured,
+    excludedFeatured,
   });
 
   return (
